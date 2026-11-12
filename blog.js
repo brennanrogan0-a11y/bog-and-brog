@@ -29,7 +29,9 @@ function localDate() {
 }
 
 function photoUrl(path) {
-    return db.storage.from("journal-photos").getPublicUrl(path)
+    return db.storage
+        .from("journal-photos")
+        .getPublicUrl(path)
         .data.publicUrl;
 }
 
@@ -60,8 +62,8 @@ function openEditor(entry = null) {
     editingEntry = entry;
 
     $("editor-heading").textContent = entry
-        ? "Revisit this memory."
-        : "A new memory.";
+        ? "Amend the official record."
+        : "What happened this time?";
 
     $("title").value = entry?.title || "";
     $("entry-date").value = entry?.entry_date || localDate();
@@ -70,7 +72,7 @@ function openEditor(entry = null) {
 
     $("publish-button").textContent = entry
         ? "Save changes"
-        : "Publish entry";
+        : "Add to the record";
 
     (entry?.photos || []).forEach((path, index) => {
         makePreview(photoUrl(path), `Existing photo ${index + 1}`);
@@ -90,12 +92,12 @@ function renderEntries() {
         empty.className = "empty-state";
 
         const title = document.createElement("h3");
-        title.textContent = "Every journal starts somewhere.";
+        title.textContent = "Suspiciously little evidence.";
 
         const text = document.createElement("p");
         text.textContent = canWrite
-            ? "Add your first photos and tell their story."
-            : "The first story is still to come.";
+            ? "Document your first incident. We need details."
+            : "Nothing to report. Yet.";
 
         empty.append(title, text);
         container.append(empty);
@@ -127,7 +129,7 @@ function renderEntries() {
         if (canWrite) {
             const edit = document.createElement("button");
             edit.className = "text-button";
-            edit.textContent = "Edit entry";
+            edit.textContent = "Amend the record";
             edit.addEventListener("click", () => openEditor(entry));
             meta.append(edit);
         }
@@ -181,7 +183,7 @@ async function loadEntries(reset = false) {
         offset = start + data.length;
 
         $("entry-count").textContent =
-            `${count} ${count === 1 ? "memory" : "memories"}`;
+            `${count} ${count === 1 ? "incident" : "incidents"}`;
 
         $("more-button").hidden = offset >= count;
 
@@ -205,6 +207,7 @@ async function updateAccount() {
             .maybeSingle();
 
         if (result.error) throw result.error;
+
         canWrite = Boolean(result.data);
     }
 
@@ -227,6 +230,7 @@ $("close-login").addEventListener("click", () => {
 });
 
 $("new-button").addEventListener("click", () => openEditor());
+
 $("cancel-button").addEventListener("click", closeEditor);
 
 $("photos").addEventListener("change", () => {
@@ -245,6 +249,7 @@ $("photos").addEventListener("change", () => {
 
 $("login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+
     if (!db) return;
 
     const button = event.submitter;
@@ -265,7 +270,7 @@ $("login-form").addEventListener("submit", async (event) => {
 
         showStatus(
             canWrite
-                ? "Welcome back. The journal is yours."
+                ? "Welcome back. Try to keep the facts straight."
                 : "Signed in, but this account does not have posting access."
         );
     } catch (error) {
@@ -284,7 +289,7 @@ $("signout-button").addEventListener("click", async () => {
     }
 
     await updateAccount();
-    showStatus("Signed out.");
+    showStatus("Clocked out. Stay out of trouble.");
 });
 
 $("more-button").addEventListener("click", async () => {
@@ -297,12 +302,15 @@ $("more-button").addEventListener("click", async () => {
 
 $("entry-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+
     if (!canWrite) return;
 
     const button = $("publish-button");
     const files = [...$("photos").files];
     const existingPhotos = editingEntry?.photos || [];
     const uploaded = [];
+    const isEditing = Boolean(editingEntry);
+
     let saved = false;
 
     button.disabled = true;
@@ -314,7 +322,7 @@ $("entry-form").addEventListener("submit", async (event) => {
         }
 
         if (!files.length && !existingPhotos.length) {
-            throw new Error("Please choose at least one photo.");
+            throw new Error("We need evidence. Please choose at least one photo.");
         }
 
         const extensions = {
@@ -337,11 +345,13 @@ $("entry-form").addEventListener("submit", async (event) => {
         const story = $("story").value.trim();
 
         if (!title || !story) {
-            throw new Error("Please add a title and a story.");
+            throw new Error("Every incident needs a title and a version of events.");
         }
 
         for (let index = 0; index < files.length; index++) {
-            showStatus(`Uploading photo ${index + 1} of ${files.length}…`);
+            showStatus(
+                `Filing photographic evidence ${index + 1} of ${files.length}…`
+            );
 
             const file = files[index];
 
@@ -356,6 +366,7 @@ $("entry-form").addEventListener("submit", async (event) => {
                 });
 
             if (error) throw error;
+
             uploaded.push(path);
         }
 
@@ -388,7 +399,12 @@ $("entry-form").addEventListener("submit", async (event) => {
 
         saved = true;
         closeEditor();
-        showStatus("Your memory has been saved.");
+
+        showStatus(
+            isEditing
+                ? "The official record has been amended."
+                : "Incident added to the record."
+        );
 
         await loadEntries(true);
     } catch (error) {
@@ -420,14 +436,18 @@ async function start() {
         SUPABASE_KEY.includes("PASTE_")
     ) {
         showStatus(
-            "The design is ready. Add your Supabase URL and publishable key in script.js to connect the journal."
+            "Add your Supabase URL and publishable key in blog.js to connect the journal."
         );
+
         renderEntries();
         return;
     }
 
     try {
-        db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        db = window.supabase.createClient(
+            SUPABASE_URL,
+            SUPABASE_KEY
+        );
 
         await updateAccount();
         await loadEntries(true);
