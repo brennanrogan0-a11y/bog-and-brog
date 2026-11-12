@@ -2,32 +2,74 @@ const SUPABASE_URL = "https://hdeygxixsjhpksbskykn.supabase.co";
 const SUPABASE_KEY = "sb_publishable_pY7T4eppbUfXUsn0oJj7jg_ZLZYfwlb";
 
 const $ = (id) => document.getElementById(id);
+const pageSize = 10;
 
 let db;
 let user = null;
 let canWrite = false;
 let editingEntry = null;
+
 let entries = [];
 let selectedPhotos = [];
 let previewUrls = [];
+let archiveGroups = [];
+
 let offset = 0;
+let activeMonth = null;
+
 let saving = false;
 let updatingPassword = false;
 let deleting = false;
+let loadingEntries = false;
 
 let photoDateRequest = 0;
 let dateEditVersion = 0;
 
-const pageSize = 10;
-
-/* Messages */
+/* General helpers */
 
 function showStatus(text = "", error = false) {
     $("status").textContent = text;
     $("status").classList.toggle("error", error);
 }
 
-/* Photo URLs and previews */
+function busy() {
+    return saving || updatingPassword || deleting;
+}
+
+function monthBounds(key) {
+    const [year, month] = key.split("-").map(Number);
+
+    const nextYear = month === 12 ? year + 1 : year;
+    const nextMonth = month === 12 ? 1 : month + 1;
+
+    return [
+        key + "-01",
+        `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`
+    ];
+}
+
+function monthLabel(key) {
+    return new Date(key + "-15T12:00:00").toLocaleDateString(
+        undefined,
+        {
+            month: "long",
+            year: "numeric"
+        }
+    );
+}
+
+function groupDates(rows) {
+    const counts = new Map();
+
+    for (const row of rows) {
+        const key = row.entry_date.slice(0, 7);
+        counts.set(key, (counts.get(key) || 0) + 1);
+    }
+
+    return [...counts].sort((a, b) => b[0].localeCompare(a[0]));
+}
+
+/* Photos */
 
 function photoUrl(path) {
     return db.storage
@@ -54,10 +96,10 @@ function addPhotoPreview(src, alt, onRemove) {
     remove.type = "button";
     remove.className = "remove-photo";
     remove.textContent = "Remove photo";
-    remove.disabled = saving || updatingPassword || deleting;
+    remove.disabled = busy();
 
     remove.addEventListener("click", () => {
-        if (saving || updatingPassword || deleting) return;
+        if (busy()) return;
 
         onRemove();
         renderPhotoPreviews();
@@ -90,22 +132,29 @@ function renderPhotoPreviews() {
     });
 }
 
-/* Read the original capture date from the first selected photo */
+/* Automatic capture date */
 
 $("entry-date").addEventListener("input", () => {
     dateEditVersion += 1;
 });
 
 async function fillDateFromPhoto(file) {
-    // Never replace an existing post date or an entered date.
     if (!file || editingEntry || $("entry-date").value) return;
 
     const request = ++photoDateRequest;
     const editVersion = dateEditVersion;
 
+    const stillCurrent = () =>
+        request === photoDateRequest &&
+        editVersion === dateEditVersion &&
+        !editingEntry &&
+        selectedPhotos[0] === file &&
+        !$("entry-date").value &&
+        !busy();
+
     try {
         if (!window.exifr) {
-            throw new Error("The photo metadata reader did not load.");
+            throw new Error("Metadata reader unavailable.");
         }
 
         const metadata = await window.exifr.parse(file, {
@@ -113,22 +162,12 @@ async function fillDateFromPhoto(file) {
             reviveValues: false
         });
 
-        // Ignore the result if the user changed anything meanwhile.
-        if (
-            request !== photoDateRequest ||
-            editVersion !== dateEditVersion ||
-            editingEntry ||
-            selectedPhotos[0] !== file ||
-            $("entry-date").value ||
-            saving
-        ) {
-            return;
-        }
+        if (!stillCurrent()) return;
 
-        const rawDate = metadata?.DateTimeOriginal;
+        const value = metadata?.DateTimeOriginal;
 
-        const match = typeof rawDate === "string"
-            ? rawDate.match(/^(\d{4})[:-](\d{2})[:-](\d{2})/)
+        const match = typeof value === "string"
+            ? value.match(/^(\d{4})[:-](\d{2})[:-](\d{2})/)
             : null;
 
         if (!match) {
@@ -138,10 +177,7 @@ async function fillDateFromPhoto(file) {
             return;
         }
 
-        const year = Number(match[1]);
-        const month = Number(match[2]);
-        const day = Number(match[3]);
-
+        const [year, month, day] = match.slice(1).map(Number);
         const check = new Date(Date.UTC(year, month - 1, day));
 
         if (
@@ -156,7 +192,6 @@ async function fillDateFromPhoto(file) {
             return;
         }
 
-        // Use the camera's calendar date without a time-zone shift.
         $("entry-date").value =
             `${match[1]}-${match[2]}-${match[3]}`;
 
@@ -166,13 +201,7 @@ async function fillDateFromPhoto(file) {
     } catch (error) {
         console.warn("Photo date could not be read:", error);
 
-        if (
-            request === photoDateRequest &&
-            editVersion === dateEditVersion &&
-            selectedPhotos[0] === file &&
-            !$("entry-date").value &&
-            !saving
-        ) {
+        if (stillCurrent()) {
             showStatus(
                 "Couldn't read this photo's capture date. Please choose the date yourself."
             );
@@ -186,17 +215,18 @@ function closeEditor() {
     photoDateRequest += 1;
     editingEntry = null;
     selectedPhotos = [];
+
     clearPreviews();
+
     $("entry-form").reset();
     $("editor-panel").hidden = true;
 }
 
 function openEditor(entry = null) {
-    if (!canWrite || saving || updatingPassword || deleting) return;
+    if (!canWrite || busy()) return;
 
     closeEditor();
 
-    // Copy the photos so Cancel discards unsaved removals.
     editingEntry = entry
         ? { ...entry, photos: [...entry.photos] }
         : null;
@@ -221,7 +251,7 @@ function openEditor(entry = null) {
     $("title").focus();
 }
 
-/* Password panel */
+/* Password editor */
 
 function closePasswordPanel() {
     $("password-form").reset();
@@ -229,19 +259,19 @@ function closePasswordPanel() {
 }
 
 function openPasswordPanel() {
-    if (!user || saving || updatingPassword || deleting) return;
+    if (!user || busy()) return;
 
     $("password-panel").hidden = false;
     $("password-panel").scrollIntoView({ behavior: "smooth" });
     $("new-password").focus();
 }
 
-/* Prevent conflicting changes during a save or deletion */
+/* Disable controls during requests */
 
 function updateBusyControls() {
-    const busy = saving || updatingPassword || deleting;
+    const locked = busy();
 
-    const controls = [
+    [
         "publish-button",
         "cancel-button",
         "new-button",
@@ -256,23 +286,342 @@ function updateBusyControls() {
         "photos",
         "new-password",
         "confirm-password"
-    ];
-
-    controls.forEach((id) => {
-        $(id).disabled = busy;
+    ].forEach((id) => {
+        $(id).disabled = locked;
     });
 
     document.querySelectorAll(
         ".remove-photo, .entry-action"
     ).forEach((button) => {
-        button.disabled = busy;
+        button.disabled = locked;
+    });
+
+    document.querySelectorAll(".archive-button").forEach((button) => {
+        button.disabled = locked || loadingEntries;
+    });
+
+    $("more-button").disabled = locked || loadingEntries;
+}
+
+/* Load dates for the entire archive */
+
+async function loadArchive() {
+    const rows = [];
+    let start = 0;
+
+    while (true) {
+        const { data, error } = await db
+            .from("entries")
+            .select("id, entry_date")
+            .order("entry_date", { ascending: false })
+            .order("id", { ascending: false })
+            .range(start, start + 999);
+
+        if (error) throw error;
+
+        rows.push(...data);
+
+        if (data.length < 1000) break;
+
+        start += data.length;
+    }
+
+    archiveGroups = groupDates(rows);
+    renderArchive();
+}
+
+/* Draw the year/month navigation */
+
+function renderArchive() {
+    const container = $("archive-list");
+
+    const expandedYears = new Set(
+        [...container.querySelectorAll("details[open]")]
+            .map((item) => item.dataset.year)
+    );
+
+    container.replaceChildren();
+
+    $("all-posts-button").setAttribute(
+        "aria-pressed",
+        String(activeMonth === null)
+    );
+
+    const total = archiveGroups.reduce(
+        (sum, item) => sum + item[1],
+        0
+    );
+
+    $("all-posts-button").textContent = `All incidents (${total})`;
+
+    if (!archiveGroups.length) {
+        const text = document.createElement("p");
+        text.className = "hint";
+        text.textContent = "Months appear as you add posts.";
+
+        container.append(text);
+        updateBusyControls();
+        return;
+    }
+
+    let currentYear;
+    let months;
+
+    for (const [key, count] of archiveGroups) {
+        const year = key.slice(0, 4);
+
+        if (year !== currentYear) {
+            currentYear = year;
+
+            const details = document.createElement("details");
+            details.className = "archive-year";
+            details.dataset.year = year;
+
+            details.open =
+                expandedYears.has(year) ||
+                year === archiveGroups[0][0].slice(0, 4) ||
+                year === activeMonth?.slice(0, 4);
+
+            const summary = document.createElement("summary");
+            summary.textContent = year;
+
+            months = document.createElement("div");
+            months.className = "archive-months";
+
+            details.append(summary, months);
+            container.append(details);
+        }
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "archive-button";
+
+        button.setAttribute(
+            "aria-pressed",
+            String(activeMonth === key)
+        );
+
+        const label = document.createElement("span");
+
+        label.textContent = new Date(
+            key + "-15T12:00:00"
+        ).toLocaleDateString(undefined, {
+            month: "long"
+        });
+
+        const number = document.createElement("span");
+        number.className = "archive-count";
+        number.textContent = count;
+
+        button.setAttribute(
+            "aria-label",
+            `${monthLabel(key)}, ${count} ${
+                count === 1 ? "incident" : "incidents"
+            }`
+        );
+
+        button.append(label, number);
+
+        button.addEventListener("click", () => {
+            selectMonth(key);
+        });
+
+        months.append(button);
+    }
+
+    updateBusyControls();
+}
+
+async function selectMonth(key) {
+    if (busy() || loadingEntries || !db) return;
+
+    const previous = activeMonth;
+
+    activeMonth = key;
+    renderArchive();
+
+    try {
+        await loadEntries(true);
+
+        $("journal").scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    } catch (error) {
+        activeMonth = previous;
+        renderArchive();
+        showStatus(error.message, true);
+    }
+}
+
+async function refreshJournal() {
+    activeMonth = null;
+
+    await loadArchive();
+    await loadEntries(true);
+}
+
+/* Load all posts or posts from the selected month */
+
+async function loadEntries(reset = false) {
+    loadingEntries = true;
+
+    $("journal").setAttribute("aria-busy", "true");
+    updateBusyControls();
+
+    try {
+        const start = reset ? 0 : offset;
+
+        let query = db
+            .from("entries")
+            .select("*", { count: "exact" });
+
+        if (activeMonth) {
+            const [first, next] = monthBounds(activeMonth);
+
+            query = query
+                .gte("entry_date", first)
+                .lt("entry_date", next);
+        }
+
+        const { data, error, count } = await query
+            .order("entry_date", { ascending: false })
+            .order("id", { ascending: false })
+            .range(start, start + pageSize - 1);
+
+        if (error) throw error;
+
+        entries = reset ? data : [...entries, ...data];
+        offset = start + data.length;
+
+        $("journal-heading").textContent = activeMonth
+            ? monthLabel(activeMonth)
+            : "The evidence";
+
+        $("entry-count").textContent =
+            `${count} ${count === 1 ? "incident" : "incidents"}`;
+
+        $("more-button").hidden = offset >= count;
+
+        $("more-button").textContent = activeMonth
+            ? "More from this month ↓"
+            : "Earlier incidents ↓";
+
+        renderEntries();
+    } finally {
+        loadingEntries = false;
+        $("journal").setAttribute("aria-busy", "false");
+        updateBusyControls();
+    }
+}
+
+/* Display posts */
+
+function renderEntries() {
+    const container = $("entries");
+    container.replaceChildren();
+
+    if (!entries.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+
+        const title = document.createElement("h3");
+
+        title.textContent = activeMonth
+            ? "No incidents this month."
+            : "Suspiciously little evidence.";
+
+        const text = document.createElement("p");
+
+        text.textContent = canWrite
+            ? "Document an incident. We need details."
+            : "Nothing to report. Yet.";
+
+        empty.append(title, text);
+        container.append(empty);
+        return;
+    }
+
+    entries.forEach((entry) => {
+        const article = document.createElement("article");
+        article.className = "entry";
+
+        const meta = document.createElement("div");
+        meta.className = "entry-meta";
+
+        const details = document.createElement("span");
+
+        details.textContent = new Date(
+            entry.entry_date + "T12:00:00"
+        ).toLocaleDateString(undefined, {
+            month: "long",
+            day: "numeric",
+            year: "numeric"
+        });
+
+        if (entry.location) {
+            details.textContent += ` · ${entry.location}`;
+        }
+
+        meta.append(details);
+
+        if (canWrite) {
+            const actions = document.createElement("div");
+            actions.className = "entry-actions";
+
+            const buttons = [
+                ["Amend the record", () => openEditor(entry)],
+                ["Delete post", () => deleteEntry(entry)]
+            ];
+
+            for (const [label, action] of buttons) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "text-button entry-action";
+                button.textContent = label;
+                button.disabled = busy();
+
+                button.addEventListener("click", action);
+                actions.append(button);
+            }
+
+            meta.append(actions);
+        }
+
+        const heading = document.createElement("h3");
+        heading.textContent = entry.title;
+
+        const photos = document.createElement("div");
+        photos.className = "entry-photos";
+
+        entry.photos.forEach((path, index) => {
+            const link = document.createElement("a");
+            link.href = photoUrl(path);
+            link.target = "_blank";
+            link.rel = "noopener";
+
+            const image = document.createElement("img");
+            image.src = link.href;
+            image.alt = `${entry.title} — photo ${index + 1}`;
+            image.loading = "lazy";
+
+            link.append(image);
+            photos.append(link);
+        });
+
+        const story = document.createElement("div");
+        story.className = "entry-story";
+        story.textContent = entry.story;
+
+        article.append(meta, heading, photos, story);
+        container.append(article);
     });
 }
 
-/* Delete a post */
+/* Delete posts */
 
 async function deleteEntry(entry) {
-    if (!canWrite || saving || updatingPassword || deleting) return;
+    if (!canWrite || busy() || loadingEntries) return;
 
     const confirmed = window.confirm(
         `Delete "${entry.title}" permanently? This cannot be undone.`
@@ -308,13 +657,13 @@ async function deleteEntry(entry) {
         entries = entries.filter((item) => item.id !== entry.id);
         renderEntries();
 
-        await loadEntries(true);
+        await refreshJournal();
 
         showStatus("Incident removed from the record.");
     } catch (error) {
         showStatus(
             deleted
-                ? "Post deleted. Refresh the page to update the journal."
+                ? "Post deleted. Refresh to update the journal and archive."
                 : error.message,
             true
         );
@@ -324,137 +673,7 @@ async function deleteEntry(entry) {
     }
 }
 
-/* Display posts */
-
-function renderEntries() {
-    const container = $("entries");
-    container.replaceChildren();
-
-    if (!entries.length) {
-        const empty = document.createElement("div");
-        empty.className = "empty-state";
-
-        const title = document.createElement("h3");
-        title.textContent = "Suspiciously little evidence.";
-
-        const text = document.createElement("p");
-        text.textContent = canWrite
-            ? "Document your first incident. We need details."
-            : "Nothing to report. Yet.";
-
-        empty.append(title, text);
-        container.append(empty);
-        return;
-    }
-
-    entries.forEach((entry) => {
-        const article = document.createElement("article");
-        article.className = "entry";
-
-        const meta = document.createElement("div");
-        meta.className = "entry-meta";
-
-        const details = document.createElement("span");
-        const date = new Date(entry.entry_date + "T12:00:00");
-
-        details.textContent = date.toLocaleDateString(undefined, {
-            month: "long",
-            day: "numeric",
-            year: "numeric"
-        });
-
-        if (entry.location) {
-            details.textContent += ` · ${entry.location}`;
-        }
-
-        meta.append(details);
-
-        if (canWrite) {
-            const edit = document.createElement("button");
-            edit.type = "button";
-            edit.className = "text-button entry-action";
-            edit.textContent = "Amend the record";
-            edit.disabled = saving || updatingPassword || deleting;
-
-            edit.addEventListener("click", () => {
-                openEditor(entry);
-            });
-
-            const removePost = document.createElement("button");
-            removePost.type = "button";
-            removePost.className = "text-button entry-action";
-            removePost.textContent = "Delete post";
-            removePost.disabled = saving || updatingPassword || deleting;
-
-            removePost.addEventListener("click", () => {
-                deleteEntry(entry);
-            });
-
-            meta.append(edit, removePost);
-        }
-
-        const heading = document.createElement("h3");
-        heading.textContent = entry.title;
-
-        const photos = document.createElement("div");
-        photos.className = "entry-photos";
-
-        entry.photos.forEach((path, index) => {
-            const link = document.createElement("a");
-            link.href = photoUrl(path);
-            link.target = "_blank";
-            link.rel = "noopener";
-
-            const image = document.createElement("img");
-            image.src = link.href;
-            image.alt = `${entry.title} — photo ${index + 1}`;
-            image.loading = "lazy";
-
-            link.append(image);
-            photos.append(link);
-        });
-
-        const story = document.createElement("div");
-        story.className = "entry-story";
-        story.textContent = entry.story;
-
-        article.append(meta, heading, photos, story);
-        container.append(article);
-    });
-}
-
-/* Load posts from Supabase */
-
-async function loadEntries(reset = false) {
-    $("more-button").disabled = true;
-
-    try {
-        const start = reset ? 0 : offset;
-
-        const { data, error, count } = await db
-            .from("entries")
-            .select("*", { count: "exact" })
-            .order("entry_date", { ascending: false })
-            .order("id", { ascending: false })
-            .range(start, start + pageSize - 1);
-
-        if (error) throw error;
-
-        entries = reset ? data : [...entries, ...data];
-        offset = start + data.length;
-
-        $("entry-count").textContent =
-            `${count} ${count === 1 ? "incident" : "incidents"}`;
-
-        $("more-button").hidden = offset >= count;
-
-        renderEntries();
-    } finally {
-        $("more-button").disabled = false;
-    }
-}
-
-/* Check sign-in and editor permissions */
+/* Account permissions */
 
 async function updateAccount() {
     const { data, error } = await db.auth.getUser();
@@ -485,7 +704,11 @@ async function updateAccount() {
     renderEntries();
 }
 
-/* Navigation buttons */
+/* Navigation */
+
+$("all-posts-button").addEventListener("click", () => {
+    selectMonth(null);
+});
 
 $("account-button").addEventListener("click", () => {
     $("login-panel").hidden = false;
@@ -499,23 +722,19 @@ $("close-login").addEventListener("click", () => {
 $("password-button").addEventListener("click", openPasswordPanel);
 
 $("close-password").addEventListener("click", () => {
-    if (!saving && !updatingPassword && !deleting) {
-        closePasswordPanel();
-    }
+    if (!busy()) closePasswordPanel();
 });
 
-$("new-button").addEventListener("click", () => openEditor());
+$("new-button").addEventListener("click", () => {
+    openEditor();
+});
 
 $("cancel-button").addEventListener("click", () => {
-    if (!saving && !updatingPassword && !deleting) {
-        closeEditor();
-    }
+    if (!busy()) closeEditor();
 });
 
-/* Select photos and try to fill the date */
-
 $("photos").addEventListener("change", () => {
-    if (saving || updatingPassword || deleting) return;
+    if (busy()) return;
 
     const files = [...$("photos").files];
 
@@ -525,7 +744,6 @@ $("photos").addEventListener("change", () => {
     $("photos").value = "";
 
     renderPhotoPreviews();
-
     fillDateFromPhoto(selectedPhotos[0]);
 });
 
@@ -567,7 +785,7 @@ $("login-form").addEventListener("submit", async (event) => {
 /* Sign out */
 
 $("signout-button").addEventListener("click", async () => {
-    if (saving || updatingPassword || deleting) return;
+    if (busy()) return;
 
     try {
         const { error } = await db.auth.signOut();
@@ -587,19 +805,16 @@ $("signout-button").addEventListener("click", async () => {
 $("password-form").addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    if (!db || !user || saving || updatingPassword || deleting) {
-        return;
-    }
+    if (!db || !user || busy()) return;
 
     const password = $("new-password").value;
-    const confirmation = $("confirm-password").value;
 
     if (password.length < 12) {
         showStatus("Please use at least 12 characters.", true);
         return;
     }
 
-    if (password !== confirmation) {
+    if (password !== $("confirm-password").value) {
         showStatus("The passwords don't match.", true);
         return;
     }
@@ -627,10 +842,10 @@ $("password-form").addEventListener("submit", async (event) => {
     }
 });
 
-/* Load older entries */
+/* Load additional posts */
 
 $("more-button").addEventListener("click", async () => {
-    if (saving || updatingPassword || deleting) return;
+    if (busy() || loadingEntries) return;
 
     try {
         await loadEntries();
@@ -639,14 +854,12 @@ $("more-button").addEventListener("click", async () => {
     }
 });
 
-/* Create or update a post */
+/* Create or edit a post */
 
 $("entry-form").addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    if (!canWrite || saving || updatingPassword || deleting) {
-        return;
-    }
+    if (!canWrite || busy() || loadingEntries) return;
 
     const files = [...selectedPhotos];
     const existingPhotos = [...(editingEntry?.photos || [])];
@@ -738,53 +951,44 @@ $("entry-form").addEventListener("submit", async (event) => {
             photos: [...existingPhotos, ...uploaded]
         };
 
-        let result;
-
-        if (editingId) {
-            result = await db
+        const result = editingId
+            ? await db
                 .from("entries")
                 .update(entry)
                 .eq("id", editingId)
                 .select()
-                .single();
-        } else {
-            result = await db
+                .single()
+            : await db
                 .from("entries")
                 .insert(entry)
                 .select()
                 .single();
-        }
 
         if (result.error) throw result.error;
 
         saved = true;
         closeEditor();
 
+        await refreshJournal();
+
         showStatus(
             editingId
                 ? "The official record has been amended."
                 : "Incident added to the record."
         );
-
-        await loadEntries(true);
     } catch (error) {
-        if (!saved && uploaded.length) {
-            const cleanup = await db.storage
-                .from("journal-photos")
-                .remove(uploaded);
-
-            if (cleanup.error) {
-                console.error(
-                    "Upload cleanup failed:",
-                    cleanup.error
-                );
-            }
-        }
-
+        /*
+         * Keep uploaded files if the save result is uncertain.
+         * A lost response does not prove the database rejected the post.
+         */
         showStatus(
             saved
-                ? "Entry saved, but the journal could not refresh. Reload the page."
-                : error.message,
+                ? "Entry saved. Refresh to update the journal and archive."
+                : `${error.message}${
+                    uploaded.length
+                        ? " Some photos uploaded. Refresh to check whether the post saved before trying again."
+                        : ""
+                }`,
             true
         );
     } finally {
@@ -793,7 +997,7 @@ $("entry-form").addEventListener("submit", async (event) => {
     }
 });
 
-/* Start the website */
+/* Start */
 
 async function start() {
     try {
@@ -811,6 +1015,16 @@ async function start() {
         if (error) throw error;
 
         await updateAccount();
+
+        try {
+            await loadArchive();
+        } catch (error) {
+            $("archive-list").textContent =
+                "Archive unavailable. Refresh to retry.";
+
+            console.error(error);
+        }
+
         await loadEntries(true);
 
         if (
