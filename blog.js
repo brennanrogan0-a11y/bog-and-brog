@@ -13,6 +13,7 @@ let previewUrls = [];
 let offset = 0;
 let saving = false;
 let updatingPassword = false;
+let deleting = false;
 
 const pageSize = 10;
 
@@ -56,10 +57,10 @@ function addPhotoPreview(src, alt, onRemove) {
     remove.type = "button";
     remove.className = "remove-photo";
     remove.textContent = "Remove photo";
-    remove.disabled = saving;
+    remove.disabled = saving || deleting;
 
     remove.addEventListener("click", () => {
-        if (saving) return;
+        if (saving || deleting) return;
 
         onRemove();
         renderPhotoPreviews();
@@ -101,7 +102,7 @@ function closeEditor() {
 }
 
 function openEditor(entry = null) {
-    if (!canWrite || saving || updatingPassword) return;
+    if (!canWrite || saving || updatingPassword || deleting) return;
 
     closeEditor();
 
@@ -135,11 +136,96 @@ function closePasswordPanel() {
 }
 
 function openPasswordPanel() {
-    if (!user || saving || updatingPassword) return;
+    if (!user || saving || updatingPassword || deleting) return;
 
     $("password-panel").hidden = false;
     $("password-panel").scrollIntoView({ behavior: "smooth" });
     $("new-password").focus();
+}
+
+function updateBusyControls() {
+    const busy = saving || updatingPassword || deleting;
+
+    const controls = [
+        "publish-button",
+        "cancel-button",
+        "new-button",
+        "signout-button",
+        "password-button",
+        "save-password-button",
+        "close-password",
+        "title",
+        "entry-date",
+        "location",
+        "story",
+        "photos",
+        "new-password",
+        "confirm-password"
+    ];
+
+    controls.forEach((id) => {
+        $(id).disabled = busy;
+    });
+
+    document.querySelectorAll(
+        ".remove-photo, .entry-action"
+    ).forEach((button) => {
+        button.disabled = busy;
+    });
+}
+
+async function deleteEntry(entry) {
+    if (!canWrite || saving || updatingPassword || deleting) return;
+
+    const confirmed = window.confirm(
+        `Delete "${entry.title}" permanently? This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    deleting = true;
+    updateBusyControls();
+
+    let deleted = false;
+
+    try {
+        const { data, error } = await db
+            .from("entries")
+            .delete()
+            .eq("id", entry.id)
+            .select("id")
+            .single();
+
+        if (error) throw error;
+
+        if (!data) {
+            throw new Error("The post could not be deleted.");
+        }
+
+        deleted = true;
+
+        if (editingEntry?.id === entry.id) {
+            closeEditor();
+        }
+
+        // Remove it locally even if the subsequent refresh fails.
+        entries = entries.filter((item) => item.id !== entry.id);
+        renderEntries();
+
+        await loadEntries(true);
+
+        showStatus("Incident removed from the record.");
+    } catch (error) {
+        showStatus(
+            deleted
+                ? "Post deleted. Refresh the page to update the journal."
+                : error.message,
+            true
+        );
+    } finally {
+        deleting = false;
+        updateBusyControls();
+    }
 }
 
 function renderEntries() {
@@ -188,10 +274,25 @@ function renderEntries() {
         if (canWrite) {
             const edit = document.createElement("button");
             edit.type = "button";
-            edit.className = "text-button";
+            edit.className = "text-button entry-action";
             edit.textContent = "Amend the record";
-            edit.addEventListener("click", () => openEditor(entry));
-            meta.append(edit);
+            edit.disabled = saving || updatingPassword || deleting;
+
+            edit.addEventListener("click", () => {
+                openEditor(entry);
+            });
+
+            const removePost = document.createElement("button");
+            removePost.type = "button";
+            removePost.className = "text-button entry-action";
+            removePost.textContent = "Delete post";
+            removePost.disabled = saving || updatingPassword || deleting;
+
+            removePost.addEventListener("click", () => {
+                deleteEntry(entry);
+            });
+
+            meta.append(edit, removePost);
         }
 
         const heading = document.createElement("h3");
@@ -282,27 +383,6 @@ async function updateAccount() {
     renderEntries();
 }
 
-function setSaving(value) {
-    saving = value;
-
-    $("publish-button").disabled = value;
-    $("cancel-button").disabled = value;
-    $("new-button").disabled = value;
-    $("signout-button").disabled = value;
-    $("password-button").disabled = value;
-    $("save-password-button").disabled = value;
-
-    $("title").disabled = value;
-    $("entry-date").disabled = value;
-    $("location").disabled = value;
-    $("story").disabled = value;
-    $("photos").disabled = value;
-
-    document.querySelectorAll(".remove-photo").forEach((button) => {
-        button.disabled = value;
-    });
-}
-
 /* Sign-in and navigation */
 
 $("account-button").addEventListener("click", () => {
@@ -317,17 +397,19 @@ $("close-login").addEventListener("click", () => {
 $("password-button").addEventListener("click", openPasswordPanel);
 
 $("close-password").addEventListener("click", () => {
-    if (!updatingPassword) closePasswordPanel();
+    if (!saving && !updatingPassword && !deleting) {
+        closePasswordPanel();
+    }
 });
 
 $("new-button").addEventListener("click", () => openEditor());
 
 $("cancel-button").addEventListener("click", () => {
-    if (!saving) closeEditor();
+    if (!saving && !deleting) closeEditor();
 });
 
 $("photos").addEventListener("change", () => {
-    if (saving) return;
+    if (saving || updatingPassword || deleting) return;
 
     selectedPhotos.push(...$("photos").files);
     $("photos").value = "";
@@ -369,7 +451,7 @@ $("login-form").addEventListener("submit", async (event) => {
 });
 
 $("signout-button").addEventListener("click", async () => {
-    if (saving || updatingPassword) return;
+    if (saving || updatingPassword || deleting) return;
 
     try {
         const { error } = await db.auth.signOut();
@@ -377,6 +459,7 @@ $("signout-button").addEventListener("click", async () => {
         if (error) throw error;
 
         await updateAccount();
+
         showStatus("Clocked out. Stay out of trouble.");
     } catch (error) {
         showStatus(error.message, true);
@@ -388,7 +471,9 @@ $("signout-button").addEventListener("click", async () => {
 $("password-form").addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    if (!db || !user || saving || updatingPassword) return;
+    if (!db || !user || saving || updatingPassword || deleting) {
+        return;
+    }
 
     const password = $("new-password").value;
     const confirmation = $("confirm-password").value;
@@ -404,12 +489,7 @@ $("password-form").addEventListener("submit", async (event) => {
     }
 
     updatingPassword = true;
-
-    $("save-password-button").disabled = true;
-    $("close-password").disabled = true;
-    $("signout-button").disabled = true;
-    $("new-button").disabled = true;
-    $("publish-button").disabled = true;
+    updateBusyControls();
 
     try {
         const { error } = await db.auth.updateUser({
@@ -427,18 +507,15 @@ $("password-form").addEventListener("submit", async (event) => {
         showStatus(error.message, true);
     } finally {
         updatingPassword = false;
-
-        $("save-password-button").disabled = false;
-        $("close-password").disabled = false;
-        $("signout-button").disabled = false;
-        $("new-button").disabled = false;
-        $("publish-button").disabled = false;
+        updateBusyControls();
     }
 });
 
 /* Load older entries */
 
 $("more-button").addEventListener("click", async () => {
+    if (saving || deleting) return;
+
     try {
         await loadEntries();
     } catch (error) {
@@ -451,7 +528,9 @@ $("more-button").addEventListener("click", async () => {
 $("entry-form").addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    if (!canWrite || saving || updatingPassword) return;
+    if (!canWrite || saving || updatingPassword || deleting) {
+        return;
+    }
 
     const files = [...selectedPhotos];
     const existingPhotos = [...(editingEntry?.photos || [])];
@@ -465,11 +544,14 @@ $("entry-form").addEventListener("submit", async (event) => {
 
     let saved = false;
 
-    setSaving(true);
+    saving = true;
+    updateBusyControls();
 
     try {
         if (files.length + existingPhotos.length > 12) {
-            throw new Error("Please use no more than 12 photos per entry.");
+            throw new Error(
+                "Please use no more than 12 photos per entry."
+            );
         }
 
         if (!files.length && !existingPhotos.length) {
@@ -496,11 +578,15 @@ $("entry-form").addEventListener("submit", async (event) => {
 
         for (const file of files) {
             if (!extensions[file.type]) {
-                throw new Error("Please use JPEG, PNG, or WebP images.");
+                throw new Error(
+                    "Please use JPEG, PNG, or WebP images."
+                );
             }
 
             if (file.size > 10 * 1024 * 1024) {
-                throw new Error(`${file.name} is larger than 10 MB.`);
+                throw new Error(
+                    `${file.name} is larger than 10 MB.`
+                );
             }
         }
 
@@ -570,7 +656,10 @@ $("entry-form").addEventListener("submit", async (event) => {
                 .remove(uploaded);
 
             if (cleanup.error) {
-                console.error("Upload cleanup failed:", cleanup.error);
+                console.error(
+                    "Upload cleanup failed:",
+                    cleanup.error
+                );
             }
         }
 
@@ -581,7 +670,8 @@ $("entry-form").addEventListener("submit", async (event) => {
             true
         );
     } finally {
-        setSaving(false);
+        saving = false;
+        updateBusyControls();
     }
 });
 
@@ -610,7 +700,10 @@ async function start() {
             (linkType === "invite" || linkType === "recovery")
         ) {
             openPasswordPanel();
-            showStatus("You're signed in. Choose a password for next time.");
+
+            showStatus(
+                "You're signed in. Choose a password for next time."
+            );
         }
     } catch (error) {
         showStatus(error.message, true);
