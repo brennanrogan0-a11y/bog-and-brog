@@ -1,11 +1,12 @@
 <!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>Bog and Brog | Adventures & Evidence</title>
 
-    <link rel="stylesheet" href="blog.css">
+    <link rel="stylesheet" href="blog.css?v=archive-1">
 
     <script
         defer
@@ -17,7 +18,7 @@
         src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js">
     </script>
 
-    <script defer src="blog.js?v=photo-date-1"></script>
+    <script defer src="blog.js?v=archive-1"></script>
 </head>
 
 <body>
@@ -26,13 +27,10 @@
             Bog and Brog<span>✳</span>
         </a>
 
-        <nav aria-label="Main navigation">
+        <nav aria-label="Account and journal">
             <a href="#journal">The evidence</a>
 
-            <button
-                id="account-button"
-                class="text-button"
-                type="button">
+            <button id="account-button" class="text-button" type="button">
                 Reporting for duty
             </button>
 
@@ -54,227 +52,244 @@
         </nav>
     </header>
 
-    <main>
-        <section class="intro">
-            <p class="eyebrow">Bog and Brog’s adventures</p>
-
-            <h1>We went<br>outside.</h1>
-
-            <div class="intro-bottom">
-                <p>
-                    Trips, questionable decisions,
-                    and photographic evidence.
-                </p>
+    <div class="page-layout">
+        <aside class="archive-sidebar">
+            <nav aria-label="Browse posts by year and month">
+                <h2>The archives</h2>
 
                 <button
-                    id="new-button"
-                    class="primary-button"
+                    id="all-posts-button"
+                    class="archive-button"
                     type="button"
-                    hidden>
-                    + Document an incident
+                    aria-pressed="true">
+                    All incidents
                 </button>
-            </div>
-        </section>
 
-        <section
-            id="login-panel"
-            class="form-panel"
-            aria-labelledby="login-heading"
-            hidden>
+                <div id="archive-list">
+                    <p class="hint">Loading months…</p>
+                </div>
+            </nav>
+        </aside>
 
-            <div class="panel-heading">
-                <h2 id="login-heading">Identify yourself.</h2>
+        <main>
+            <section class="intro">
+                <p class="eyebrow">Bog and Brog’s adventures</p>
 
-                <button
-                    id="close-login"
-                    class="text-button"
-                    type="button">
-                    Close
-                </button>
-            </div>
+                <h1>We went<br>outside.</h1>
 
-            <p>Authorized troublemakers only.</p>
+                <div class="intro-bottom">
+                    <p>
+                        Trips, questionable decisions,
+                        and photographic evidence.
+                    </p>
 
-            <form id="login-form">
-                <label for="email">Email</label>
-                <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autocomplete="username"
-                    required
-                >
+                    <button
+                        id="new-button"
+                        class="primary-button"
+                        type="button"
+                        hidden>
+                        + Document an incident
+                    </button>
+                </div>
+            </section>
 
-                <label for="password">Password</label>
-                <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autocomplete="current-password"
-                    required
-                >
+            <section
+                id="login-panel"
+                class="form-panel"
+                aria-labelledby="login-heading"
+                hidden>
 
-                <button class="primary-button" type="submit">
-                    Sign in
-                </button>
-            </form>
-        </section>
+                <div class="panel-heading">
+                    <h2 id="login-heading">Identify yourself.</h2>
 
-        <section
-            id="password-panel"
-            class="form-panel"
-            aria-labelledby="password-heading"
-            hidden>
-
-            <div class="panel-heading">
-                <h2 id="password-heading">Set or change your password</h2>
-
-                <button
-                    id="close-password"
-                    class="text-button"
-                    type="button">
-                    Close
-                </button>
-            </div>
-
-            <p>Use at least 12 characters.</p>
-
-            <form id="password-form">
-                <label for="new-password">New password</label>
-                <input
-                    id="new-password"
-                    name="new-password"
-                    type="password"
-                    autocomplete="new-password"
-                    minlength="12"
-                    required
-                >
-
-                <label for="confirm-password">Confirm password</label>
-                <input
-                    id="confirm-password"
-                    name="confirm-password"
-                    type="password"
-                    autocomplete="new-password"
-                    minlength="12"
-                    required
-                >
-
-                <button
-                    id="save-password-button"
-                    class="primary-button"
-                    type="submit">
-                    Save password
-                </button>
-            </form>
-        </section>
-
-        <section
-            id="editor-panel"
-            class="form-panel"
-            aria-labelledby="editor-heading"
-            hidden>
-
-            <div class="panel-heading">
-                <h2 id="editor-heading">What happened this time?</h2>
-
-                <button
-                    id="cancel-button"
-                    class="text-button"
-                    type="button">
-                    Cancel
-                </button>
-            </div>
-
-            <form id="entry-form">
-                <label for="title">Incident title</label>
-                <input
-                    id="title"
-                    name="title"
-                    type="text"
-                    maxlength="160"
-                    required
-                >
-
-                <div class="field-row">
-                    <div>
-                        <label for="entry-date">Date of incident</label>
-                        <input
-                            id="entry-date"
-                            name="entry-date"
-                            type="date"
-                            required
-                        >
-                    </div>
-
-                    <div>
-                        <label for="location">Where were we?</label>
-                        <input
-                            id="location"
-                            name="location"
-                            type="text"
-                            maxlength="160"
-                            placeholder="Approximate location of the nonsense"
-                        >
-                    </div>
+                    <button
+                        id="close-login"
+                        class="text-button"
+                        type="button">
+                        Close
+                    </button>
                 </div>
 
-                <label for="story">Our version of events</label>
-                <textarea
-                    id="story"
-                    name="story"
-                    rows="8"
-                    maxlength="30000"
-                    placeholder="For the record, it seemed like a good idea."
-                    required
-                ></textarea>
+                <p>Authorized troublemakers only.</p>
 
-                <label for="photos">Photographic evidence</label>
-                <input
-                    id="photos"
-                    name="photos"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    aria-describedby="photo-help"
-                    multiple
-                >
+                <form id="login-form">
+                    <label for="email">Email</label>
+                    <input
+                        id="email"
+                        type="email"
+                        autocomplete="username"
+                        required
+                    >
 
-                <p id="photo-help" class="hint">
-                    Up to 12 photos per entry, 10 MB each.
-                    JPEG, PNG, or WebP. Remove a photo using its
-                    Remove photo button. Changes take effect when saved.
-                </p>
+                    <label for="password">Password</label>
+                    <input
+                        id="password"
+                        type="password"
+                        autocomplete="current-password"
+                        required
+                    >
 
-                <div id="photo-preview" class="photo-preview"></div>
+                    <button class="primary-button" type="submit">
+                        Sign in
+                    </button>
+                </form>
+            </section>
+
+            <section
+                id="password-panel"
+                class="form-panel"
+                aria-labelledby="password-heading"
+                hidden>
+
+                <div class="panel-heading">
+                    <h2 id="password-heading">
+                        Set or change your password
+                    </h2>
+
+                    <button
+                        id="close-password"
+                        class="text-button"
+                        type="button">
+                        Close
+                    </button>
+                </div>
+
+                <p>Use at least 12 characters.</p>
+
+                <form id="password-form">
+                    <label for="new-password">New password</label>
+                    <input
+                        id="new-password"
+                        type="password"
+                        autocomplete="new-password"
+                        minlength="12"
+                        required
+                    >
+
+                    <label for="confirm-password">Confirm password</label>
+                    <input
+                        id="confirm-password"
+                        type="password"
+                        autocomplete="new-password"
+                        minlength="12"
+                        required
+                    >
+
+                    <button
+                        id="save-password-button"
+                        class="primary-button"
+                        type="submit">
+                        Save password
+                    </button>
+                </form>
+            </section>
+
+            <section
+                id="editor-panel"
+                class="form-panel"
+                aria-labelledby="editor-heading"
+                hidden>
+
+                <div class="panel-heading">
+                    <h2 id="editor-heading">What happened this time?</h2>
+
+                    <button
+                        id="cancel-button"
+                        class="text-button"
+                        type="button">
+                        Cancel
+                    </button>
+                </div>
+
+                <form id="entry-form">
+                    <label for="title">Incident title</label>
+                    <input id="title" maxlength="160" required>
+
+                    <div class="field-row">
+                        <div>
+                            <label for="entry-date">Date of incident</label>
+                            <input
+                                id="entry-date"
+                                type="date"
+                                aria-describedby="date-help"
+                                required
+                            >
+                        </div>
+
+                        <div>
+                            <label for="location">Where were we?</label>
+                            <input
+                                id="location"
+                                maxlength="160"
+                                placeholder="Approximate location of the nonsense"
+                            >
+                        </div>
+                    </div>
+
+                    <p id="date-help" class="hint">
+                        For new posts, we’ll try the first photo’s capture date.
+                        You can always enter or change it yourself.
+                    </p>
+
+                    <label for="story">Our version of events</label>
+                    <textarea
+                        id="story"
+                        rows="8"
+                        maxlength="30000"
+                        placeholder="For the record, it seemed like a good idea."
+                        required
+                    ></textarea>
+
+                    <label for="photos">Photographic evidence</label>
+                    <input
+                        id="photos"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        aria-describedby="photo-help"
+                        multiple
+                    >
+
+                    <p id="photo-help" class="hint">
+                        Up to 12 photos, 10 MB each.
+                        JPEG, PNG, or WebP.
+                        Photo removals take effect when you save.
+                    </p>
+
+                    <div id="photo-preview" class="photo-preview"></div>
+
+                    <button
+                        id="publish-button"
+                        class="primary-button"
+                        type="submit">
+                        Add to the record
+                    </button>
+                </form>
+            </section>
+
+            <p id="status" role="status" aria-live="polite"></p>
+
+            <section
+                id="journal"
+                aria-labelledby="journal-heading"
+                aria-busy="false">
+
+                <div class="journal-heading">
+                    <h2 id="journal-heading">The evidence</h2>
+                    <span id="entry-count"></span>
+                </div>
+
+                <div id="entries"></div>
 
                 <button
-                    id="publish-button"
-                    class="primary-button"
-                    type="submit">
-                    Add to the record
+                    id="more-button"
+                    class="secondary-button"
+                    type="button"
+                    hidden>
+                    Earlier incidents ↓
                 </button>
-            </form>
-        </section>
-
-        <p id="status" role="status" aria-live="polite"></p>
-
-        <section id="journal" aria-labelledby="journal-heading">
-            <div class="journal-heading">
-                <h2 id="journal-heading">The evidence</h2>
-                <span id="entry-count"></span>
-            </div>
-
-            <div id="entries"></div>
-
-            <button
-                id="more-button"
-                class="secondary-button"
-                type="button"
-                hidden>
-                Earlier incidents ↓
-            </button>
-        </section>
-    </main>
+            </section>
+        </main>
+    </div>
 
     <footer>
         <a class="wordmark" href="./">
