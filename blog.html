@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Bog and Brog | Our Photo Journal</title>
+
+    <link rel="stylesheet" href="blog.css">
+
+    <script
+            defer
+            src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+    </script>
+
+    <script defer src="blog.js"></script>
+</head>
+
+<body>
+<header class="site-header">
+    <a class="wordmark" href="./">Bog and Brog<span>✳</span></a>
+
+    <nav aria-label="Main navigation">
+        <a href="#journal">The journal</a>
+        <button id="account-button" class="text-button">
+            Writer sign-in
+        </button>
+        <button id="signout-button" class="text-button" hidden>
+            Sign out
+        </button>
+    </nav>
+</header>
+
+<main>
+    <section class="intro">
+        <p class="eyebrow">A shared photo journal</p>
+        <h1>Our days,<br>worth keeping.</h1>
+
+        <div class="intro-bottom">
+            <p>
+                Places we go. Things we notice.
+                The little stories we want to remember.
+            </p>
+
+            <button id="new-button" class="primary-button" hidden>
+                + New entry
+            </button>
+        </div>
+    </section>
+
+    <section id="login-panel" class="form-panel" hidden>
+        <div class="panel-heading">
+            <h2>Welcome back.</h2>
+            <button id="close-login" class="text-button">Close</button>
+        </div>
+
+        <p>Sign in to add to the journal.</p>
+
+        <form id="login-form">
+            <label for="email">Email</label>
+            <input
+                    id="email"
+                    type="email"
+                    autocomplete="username"
+                    required
+            >
+
+            <label for="password">Password</label>
+            <input
+                    id="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+            >
+
+            <button class="primary-button" type="submit">
+                Sign in
+            </button>
+        </form>
+    </section>
+
+    <section id="editor-panel" class="form-panel" hidden>
+        <div class="panel-heading">
+            <h2 id="editor-heading">A new memory.</h2>
+            <button id="cancel-button" class="text-button">Cancel</button>
+        </div>
+
+        <form id="entry-form">
+            <label for="title">Title</label>
+            <input id="title" maxlength="160" required>
+
+            <div class="field-row">
+                <div>
+                    <label for="entry-date">Date</label>
+                    <input id="entry-date" type="date" required>
+                </div>
+
+                <div>
+                    <label for="location">Place, if you like</label>
+                    <input
+                            id="location"
+                            maxlength="160"
+                            placeholder="Somewhere worth remembering"
+                    >
+                </div>
+            </div>
+
+            <label for="story">The story</label>
+            <textarea
+                    id="story"
+                    rows="8"
+                    maxlength="30000"
+                    placeholder="What happened? What do you want to remember?"
+                    required
+            ></textarea>
+
+            <label for="photos">Photos</label>
+            <input
+                    id="photos"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+            >
+
+            <p class="hint">
+                Up to 12 photos per entry, 10 MB each.
+                Use JPEG, PNG, or WebP. When editing, new photos
+                are added to the existing ones.
+            </p>
+
+            <div id="photo-preview" class="photo-preview"></div>
+
+            <button
+                    id="publish-button"
+                    class="primary-button"
+                    type="submit"
+            >
+                Publish entry
+            </button>
+        </form>
+    </section>
+
+    <p id="status" role="status" aria-live="polite"></p>
+
+    <section id="journal" aria-labelledby="journal-heading">
+        <div class="journal-heading">
+            <h2 id="journal-heading">The journal</h2>
+            <span id="entry-count"></span>
+        </div>
+
+        <div id="entries"></div>
+
+        <button id="more-button" class="secondary-button" hidden>
+            Older entries ↓
+        </button>
+    </section>
+</main>
+
+<footer>
+    <a class="wordmark" href="./">Bog and Brog<span>✳</span></a>
+    <p>A little collection of a life together.</p>
+</footer>
+</body>
+</html>
+
+<body>
+
+</body>
