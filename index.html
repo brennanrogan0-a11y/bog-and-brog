@@ -133,10 +133,7 @@
                 </button>
             </div>
 
-            <p>
-                Choose a password with at least 12 characters.
-                This updates the account you are currently signed into.
-            </p>
+            <p>Use at least 12 characters.</p>
 
             <form id="password-form">
                 <label for="new-password">New password</label>
@@ -159,7 +156,10 @@
                     required
                 >
 
-                <button class="primary-button" type="submit">
+                <button
+                    id="save-password-button"
+                    class="primary-button"
+                    type="submit">
                     Save password
                 </button>
             </form>
@@ -237,8 +237,8 @@
 
                 <p id="photo-help" class="hint">
                     Up to 12 photos per entry, 10 MB each.
-                    JPEG, PNG, or WebP. Remove photos using the buttons
-                    below. Changes take effect when you save.
+                    JPEG, PNG, or WebP. Remove a photo using its
+                    Remove photo button. Changes take effect when saved.
                 </p>
 
                 <div id="photo-preview" class="photo-preview"></div>
