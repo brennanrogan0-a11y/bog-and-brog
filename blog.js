@@ -12,6 +12,7 @@ let selectedPhotos = [];
 let previewUrls = [];
 let offset = 0;
 let saving = false;
+let updatingPassword = false;
 
 const pageSize = 10;
 
@@ -59,6 +60,7 @@ function addPhotoPreview(src, alt, onRemove) {
 
     remove.addEventListener("click", () => {
         if (saving) return;
+
         onRemove();
         renderPhotoPreviews();
     });
@@ -99,11 +101,10 @@ function closeEditor() {
 }
 
 function openEditor(entry = null) {
-    if (!canWrite || saving) return;
+    if (!canWrite || saving || updatingPassword) return;
 
     closeEditor();
 
-    // Copy the photo list so Cancel discards unsaved removals.
     editingEntry = entry
         ? { ...entry, photos: [...entry.photos] }
         : null;
@@ -126,6 +127,19 @@ function openEditor(entry = null) {
     $("editor-panel").hidden = false;
     $("editor-panel").scrollIntoView({ behavior: "smooth" });
     $("title").focus();
+}
+
+function closePasswordPanel() {
+    $("password-form").reset();
+    $("password-panel").hidden = true;
+}
+
+function openPasswordPanel() {
+    if (!user || saving || updatingPassword) return;
+
+    $("password-panel").hidden = false;
+    $("password-panel").scrollIntoView({ behavior: "smooth" });
+    $("new-password").focus();
 }
 
 function renderEntries() {
@@ -259,9 +273,11 @@ async function updateAccount() {
 
     $("account-button").hidden = Boolean(user);
     $("signout-button").hidden = !user;
+    $("password-button").hidden = !user;
     $("new-button").hidden = !canWrite;
 
     if (!canWrite) closeEditor();
+    if (!user) closePasswordPanel();
 
     renderEntries();
 }
@@ -273,6 +289,8 @@ function setSaving(value) {
     $("cancel-button").disabled = value;
     $("new-button").disabled = value;
     $("signout-button").disabled = value;
+    $("password-button").disabled = value;
+    $("save-password-button").disabled = value;
 
     $("title").disabled = value;
     $("entry-date").disabled = value;
@@ -285,6 +303,8 @@ function setSaving(value) {
     });
 }
 
+/* Sign-in and navigation */
+
 $("account-button").addEventListener("click", () => {
     $("login-panel").hidden = false;
     $("email").focus();
@@ -292,6 +312,12 @@ $("account-button").addEventListener("click", () => {
 
 $("close-login").addEventListener("click", () => {
     $("login-panel").hidden = true;
+});
+
+$("password-button").addEventListener("click", openPasswordPanel);
+
+$("close-password").addEventListener("click", () => {
+    if (!updatingPassword) closePasswordPanel();
 });
 
 $("new-button").addEventListener("click", () => openEditor());
@@ -304,8 +330,6 @@ $("photos").addEventListener("change", () => {
     if (saving) return;
 
     selectedPhotos.push(...$("photos").files);
-
-    // Reset the picker so the same file can be selected again.
     $("photos").value = "";
 
     renderPhotoPreviews();
@@ -345,7 +369,7 @@ $("login-form").addEventListener("submit", async (event) => {
 });
 
 $("signout-button").addEventListener("click", async () => {
-    if (saving) return;
+    if (saving || updatingPassword) return;
 
     try {
         const { error } = await db.auth.signOut();
@@ -359,6 +383,61 @@ $("signout-button").addEventListener("click", async () => {
     }
 });
 
+/* Set or change the signed-in user's password */
+
+$("password-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    if (!db || !user || saving || updatingPassword) return;
+
+    const password = $("new-password").value;
+    const confirmation = $("confirm-password").value;
+
+    if (password.length < 12) {
+        showStatus("Please use at least 12 characters.", true);
+        return;
+    }
+
+    if (password !== confirmation) {
+        showStatus("The passwords don't match.", true);
+        return;
+    }
+
+    updatingPassword = true;
+
+    $("save-password-button").disabled = true;
+    $("close-password").disabled = true;
+    $("signout-button").disabled = true;
+    $("new-button").disabled = true;
+    $("publish-button").disabled = true;
+
+    try {
+        const { error } = await db.auth.updateUser({
+            password
+        });
+
+        if (error) throw error;
+
+        closePasswordPanel();
+
+        showStatus(
+            "Password saved. You can now sign in with your email and password."
+        );
+    } catch (error) {
+        showStatus(error.message, true);
+    } finally {
+        updatingPassword = false;
+
+        $("save-password-button").disabled = false;
+        $("close-password").disabled = false;
+        $("signout-button").disabled = false;
+        $("new-button").disabled = false;
+        $("publish-button").disabled = false;
+    }
+});
+
+/* Load older entries */
+
 $("more-button").addEventListener("click", async () => {
     try {
         await loadEntries();
@@ -367,10 +446,12 @@ $("more-button").addEventListener("click", async () => {
     }
 });
 
+/* Create and edit entries */
+
 $("entry-form").addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    if (!canWrite || saving) return;
+    if (!canWrite || saving || updatingPassword) return;
 
     const files = [...selectedPhotos];
     const existingPhotos = [...(editingEntry?.photos || [])];
@@ -502,17 +583,37 @@ $("entry-form").addEventListener("submit", async (event) => {
     } finally {
         setSaving(false);
     }
-});
+}
+
+/* Start the website */
 
 async function start() {
     try {
+        // Capture the link type before Supabase processes the URL.
+        const linkType = new URLSearchParams(
+            window.location.hash.slice(1)
+        ).get("type");
+
         db = window.supabase.createClient(
             SUPABASE_URL,
             SUPABASE_KEY
         );
 
+        // Allow authentication links opened on this page to be processed.
+        const { error } = await db.auth.getSession();
+
+        if (error) throw error;
+
         await updateAccount();
         await loadEntries(true);
+
+        if (
+            user &&
+            (linkType === "invite" || linkType === "recovery")
+        ) {
+            openPasswordPanel();
+            showStatus("You're signed in. Choose a password for next time.");
+        }
     } catch (error) {
         showStatus(error.message, true);
     }
