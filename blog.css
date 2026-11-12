@@ -1,66 +1,228 @@
-/* Forest-green theme */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Libre+Caslon+Display&display=swap");
 
 :root {
-    --paper: #101e17;
-    --ink: #edf0df;
+    --background: #101e17;
+    --panel: #192e21;
+    --text: #edf0df;
     --muted: #a7b8a4;
-    --line: #354d3b;
-    --accent: #bed09a;
+    --border: #354d3b;
+    --accent: #c4d4aa;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+html {
+    scroll-behavior: smooth;
 }
 
 body {
-    background-color: var(--paper);
-    color: var(--ink);
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+    font-family: "DM Sans", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
 }
+
+button,
+input,
+textarea {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+button:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+a {
+    color: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 4px;
+}
+
+/* Page width */
+
+.site-header,
+main,
+footer {
+    width: 90%;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* Header */
 
 .site-header {
-    border-bottom-color: var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
 }
 
-.wordmark span,
-.eyebrow {
+.wordmark {
+    font-size: 23px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    text-decoration: none;
+}
+
+.wordmark span {
+    margin-left: 8px;
     color: var(--accent);
 }
 
+nav {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 22px;
+    font-size: 14px;
+}
+
+nav a {
+    text-decoration: none;
+}
+
+nav a:hover,
+.text-button:hover {
+    color: var(--accent);
+}
+
+.text-button {
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+}
+
+/* Introduction */
+
 .intro {
-    padding-block: 80px 55px;
+    padding: 48px 0 38px;
+}
+
+.eyebrow {
+    margin: 0 0 16px;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
 }
 
 h1 {
-    color: #edf0df;
+    margin: 0;
+    font-family: "Libre Caslon Display", Georgia, serif;
+    font-size: clamp(56px, 8vw, 96px);
+    font-weight: 400;
+    line-height: 0.98;
+    letter-spacing: -2px;
+}
+
+.intro-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    margin-top: 24px;
+}
+
+.intro-bottom p {
+    max-width: 420px;
+    margin: 0;
+    color: var(--muted);
+}
+
+.primary-button,
+.secondary-button {
+    padding: 11px 18px;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    font-size: 14px;
 }
 
 .primary-button {
-    background-color: #c4d4aa;
+    background: var(--accent);
     color: #15271a;
-    border-color: #c4d4aa;
     font-weight: 700;
 }
 
 .primary-button:hover {
-    background-color: #d9e5c5;
-    border-color: #d9e5c5;
+    background: #d9e5c5;
 }
 
 .secondary-button {
-    border-color: #849c79;
-    color: var(--ink);
+    background: transparent;
+    color: var(--text);
 }
 
 .secondary-button:hover {
-    background-color: #243c2b;
+    background: var(--panel);
 }
 
+/* Sign-in and entry forms */
+
 .form-panel {
-    background-color: #192e21;
-    border-color: #3d5842;
+    margin: 20px 0 32px;
+    padding: 28px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+}
+
+.panel-heading,
+.journal-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.panel-heading h2 {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.2;
+}
+
+form {
+    display: grid;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+label {
+    font-size: 14px;
+    font-weight: 600;
 }
 
 input,
 textarea {
-    background-color: #102017;
-    border-color: #536c50;
-    color: #edf0df;
+    width: 100%;
+    min-width: 0;
+    padding: 12px;
+    background: #102017;
+    color: var(--text);
+    border: 1px solid #536c50;
+    border-radius: 4px;
     color-scheme: dark;
 }
 
@@ -69,26 +231,228 @@ textarea::placeholder {
     color: #9bad96;
 }
 
-input[type="file"]::file-selector-button {
-    margin-right: 12px;
-    padding: 8px 12px;
-    background-color: #304c36;
-    color: #edf0df;
-    border: 1px solid #66825b;
-    border-radius: 3px;
-    cursor: pointer;
+textarea {
+    resize: vertical;
 }
 
-.entry-photos img {
-    background-color: #192e21;
+.field-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 20px;
+}
+
+.field-row label {
+    display: block;
+    margin-bottom: 12px;
+}
+
+form .primary-button {
+    justify-self: start;
+    margin-top: 10px;
+}
+
+.hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.photo-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.photo-preview img {
+    display: block;
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+/* Messages */
+
+#status {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+}
+
+#status:empty {
+    display: none;
 }
 
 #status.error {
     color: #ffb6a7;
 }
 
+/* Journal */
+
+.journal-heading {
+    padding: 18px 0;
+    border-top: 1px solid var(--accent);
+    border-bottom: 1px solid var(--border);
+}
+
+.journal-heading h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+#entry-count {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.entry {
+    min-width: 0;
+    padding: 32px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.entry-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.entry h3 {
+    margin: 12px 0 20px;
+    font-family: "Libre Caslon Display", Georgia, serif;
+    font-size: clamp(32px, 5vw, 48px);
+    font-weight: 400;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+/* Bounded photos: no image can spill outside the journal */
+
+.entry-photos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.entry-photos a {
+    display: block;
+    min-width: 0;
+    background: #17291e;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.entry-photos a:first-child {
+    grid-column: 1 / -1;
+}
+
+.entry-photos img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: 240px;
+    object-fit: contain;
+}
+
+.entry-photos a:first-child img {
+    height: 420px;
+}
+
+.entry-story {
+    max-width: 760px;
+    margin: 22px auto 0;
+    font-size: 16px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.empty-state {
+    padding: 50px 15px;
+    text-align: center;
+    color: var(--muted);
+}
+
+.empty-state h3 {
+    color: var(--text);
+    font-family: "Libre Caslon Display", Georgia, serif;
+    font-size: 38px;
+    font-weight: 400;
+}
+
+#more-button {
+    margin-top: 24px;
+}
+
+/* Footer */
+
+footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    padding: 36px 0;
+}
+
+footer p {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+/* Phones */
+
 @media (max-width: 650px) {
+    .site-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 20px 0;
+    }
+
+    nav {
+        gap: 18px;
+    }
+
     .intro {
-        padding-block: 45px 35px;
+        padding: 34px 0 28px;
+    }
+
+    .intro-bottom,
+    footer {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .form-panel {
+        padding: 18px;
+    }
+
+    .field-row,
+    .entry-photos {
+        grid-template-columns: 1fr;
+    }
+
+    .entry-meta {
+        flex-wrap: wrap;
+    }
+
+    .entry-photos img,
+    .entry-photos a:first-child img {
+        height: auto;
+        max-height: 420px;
+        object-fit: contain;
+    }
+
+    .entry {
+        padding: 26px 0;
     }
 }
