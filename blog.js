@@ -583,13 +583,12 @@ $("entry-form").addEventListener("submit", async (event) => {
     } finally {
         setSaving(false);
     }
-}
+});
 
 /* Start the website */
 
 async function start() {
     try {
-        // Capture the link type before Supabase processes the URL.
         const linkType = new URLSearchParams(
             window.location.hash.slice(1)
         ).get("type");
@@ -599,7 +598,6 @@ async function start() {
             SUPABASE_KEY
         );
 
-        // Allow authentication links opened on this page to be processed.
         const { error } = await db.auth.getSession();
 
         if (error) throw error;
