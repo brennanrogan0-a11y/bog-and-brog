@@ -25,11 +25,26 @@
         <nav aria-label="Main navigation">
             <a href="#journal">The evidence</a>
 
-            <button id="account-button" class="text-button">
+            <button
+                id="account-button"
+                class="text-button"
+                type="button">
                 Reporting for duty
             </button>
 
-            <button id="signout-button" class="text-button" hidden>
+            <button
+                id="password-button"
+                class="text-button"
+                type="button"
+                hidden>
+                Set / change password
+            </button>
+
+            <button
+                id="signout-button"
+                class="text-button"
+                type="button"
+                hidden>
                 Clock out
             </button>
         </nav>
@@ -47,16 +62,29 @@
                     and photographic evidence.
                 </p>
 
-                <button id="new-button" class="primary-button" hidden>
+                <button
+                    id="new-button"
+                    class="primary-button"
+                    type="button"
+                    hidden>
                     + Document an incident
                 </button>
             </div>
         </section>
 
-        <section id="login-panel" class="form-panel" hidden>
+        <section
+            id="login-panel"
+            class="form-panel"
+            aria-labelledby="login-heading"
+            hidden>
+
             <div class="panel-heading">
-                <h2>Identify yourself.</h2>
-                <button id="close-login" class="text-button">
+                <h2 id="login-heading">Identify yourself.</h2>
+
+                <button
+                    id="close-login"
+                    class="text-button"
+                    type="button">
                     Close
                 </button>
             </div>
@@ -67,6 +95,7 @@
                 <label for="email">Email</label>
                 <input
                     id="email"
+                    name="email"
                     type="email"
                     autocomplete="username"
                     required
@@ -75,6 +104,7 @@
                 <label for="password">Password</label>
                 <input
                     id="password"
+                    name="password"
                     type="password"
                     autocomplete="current-password"
                     required
@@ -86,29 +116,99 @@
             </form>
         </section>
 
-        <section id="editor-panel" class="form-panel" hidden>
+        <section
+            id="password-panel"
+            class="form-panel"
+            aria-labelledby="password-heading"
+            hidden>
+
+            <div class="panel-heading">
+                <h2 id="password-heading">Set or change your password</h2>
+
+                <button
+                    id="close-password"
+                    class="text-button"
+                    type="button">
+                    Close
+                </button>
+            </div>
+
+            <p>
+                Choose a password with at least 12 characters.
+                This updates the account you are currently signed into.
+            </p>
+
+            <form id="password-form">
+                <label for="new-password">New password</label>
+                <input
+                    id="new-password"
+                    name="new-password"
+                    type="password"
+                    autocomplete="new-password"
+                    minlength="12"
+                    required
+                >
+
+                <label for="confirm-password">Confirm password</label>
+                <input
+                    id="confirm-password"
+                    name="confirm-password"
+                    type="password"
+                    autocomplete="new-password"
+                    minlength="12"
+                    required
+                >
+
+                <button class="primary-button" type="submit">
+                    Save password
+                </button>
+            </form>
+        </section>
+
+        <section
+            id="editor-panel"
+            class="form-panel"
+            aria-labelledby="editor-heading"
+            hidden>
+
             <div class="panel-heading">
                 <h2 id="editor-heading">What happened this time?</h2>
 
-                <button id="cancel-button" class="text-button">
+                <button
+                    id="cancel-button"
+                    class="text-button"
+                    type="button">
                     Cancel
                 </button>
             </div>
 
             <form id="entry-form">
                 <label for="title">Incident title</label>
-                <input id="title" maxlength="160" required>
+                <input
+                    id="title"
+                    name="title"
+                    type="text"
+                    maxlength="160"
+                    required
+                >
 
                 <div class="field-row">
                     <div>
                         <label for="entry-date">Date of incident</label>
-                        <input id="entry-date" type="date" required>
+                        <input
+                            id="entry-date"
+                            name="entry-date"
+                            type="date"
+                            required
+                        >
                     </div>
 
                     <div>
                         <label for="location">Where were we?</label>
                         <input
                             id="location"
+                            name="location"
+                            type="text"
                             maxlength="160"
                             placeholder="Approximate location of the nonsense"
                         >
@@ -118,6 +218,7 @@
                 <label for="story">Our version of events</label>
                 <textarea
                     id="story"
+                    name="story"
                     rows="8"
                     maxlength="30000"
                     placeholder="For the record, it seemed like a good idea."
@@ -127,15 +228,17 @@
                 <label for="photos">Photographic evidence</label>
                 <input
                     id="photos"
+                    name="photos"
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
+                    aria-describedby="photo-help"
                     multiple
                 >
 
-                <p class="hint">
+                <p id="photo-help" class="hint">
                     Up to 12 photos per entry, 10 MB each.
-                    JPEG, PNG, or WebP. New photos are added
-                    to existing ones when editing.
+                    JPEG, PNG, or WebP. Remove photos using the buttons
+                    below. Changes take effect when you save.
                 </p>
 
                 <div id="photo-preview" class="photo-preview"></div>
@@ -143,8 +246,7 @@
                 <button
                     id="publish-button"
                     class="primary-button"
-                    type="submit"
-                >
+                    type="submit">
                     Add to the record
                 </button>
             </form>
@@ -160,7 +262,11 @@
 
             <div id="entries"></div>
 
-            <button id="more-button" class="secondary-button" hidden>
+            <button
+                id="more-button"
+                class="secondary-button"
+                type="button"
+                hidden>
                 Earlier incidents ↓
             </button>
         </section>
