@@ -15,22 +15,19 @@ let saving = false;
 let updatingPassword = false;
 let deleting = false;
 
+let photoDateRequest = 0;
+let dateEditVersion = 0;
+
 const pageSize = 10;
+
+/* Messages */
 
 function showStatus(text = "", error = false) {
     $("status").textContent = text;
     $("status").classList.toggle("error", error);
 }
 
-function localDate() {
-    const date = new Date();
-
-    return [
-        date.getFullYear(),
-        String(date.getMonth() + 1).padStart(2, "0"),
-        String(date.getDate()).padStart(2, "0")
-    ].join("-");
-}
+/* Photo URLs and previews */
 
 function photoUrl(path) {
     return db.storage
@@ -57,10 +54,10 @@ function addPhotoPreview(src, alt, onRemove) {
     remove.type = "button";
     remove.className = "remove-photo";
     remove.textContent = "Remove photo";
-    remove.disabled = saving || deleting;
+    remove.disabled = saving || updatingPassword || deleting;
 
     remove.addEventListener("click", () => {
-        if (saving || deleting) return;
+        if (saving || updatingPassword || deleting) return;
 
         onRemove();
         renderPhotoPreviews();
@@ -93,7 +90,100 @@ function renderPhotoPreviews() {
     });
 }
 
+/* Read the original capture date from the first selected photo */
+
+$("entry-date").addEventListener("input", () => {
+    dateEditVersion += 1;
+});
+
+async function fillDateFromPhoto(file) {
+    // Never replace an existing post date or an entered date.
+    if (!file || editingEntry || $("entry-date").value) return;
+
+    const request = ++photoDateRequest;
+    const editVersion = dateEditVersion;
+
+    try {
+        if (!window.exifr) {
+            throw new Error("The photo metadata reader did not load.");
+        }
+
+        const metadata = await window.exifr.parse(file, {
+            pick: ["DateTimeOriginal"],
+            reviveValues: false
+        });
+
+        // Ignore the result if the user changed anything meanwhile.
+        if (
+            request !== photoDateRequest ||
+            editVersion !== dateEditVersion ||
+            editingEntry ||
+            selectedPhotos[0] !== file ||
+            $("entry-date").value ||
+            saving
+        ) {
+            return;
+        }
+
+        const rawDate = metadata?.DateTimeOriginal;
+
+        const match = typeof rawDate === "string"
+            ? rawDate.match(/^(\d{4})[:-](\d{2})[:-](\d{2})/)
+            : null;
+
+        if (!match) {
+            showStatus(
+                "This photo has no original capture date. Please choose the date yourself."
+            );
+            return;
+        }
+
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+
+        const check = new Date(Date.UTC(year, month - 1, day));
+
+        if (
+            year < 1000 ||
+            check.getUTCFullYear() !== year ||
+            check.getUTCMonth() !== month - 1 ||
+            check.getUTCDate() !== day
+        ) {
+            showStatus(
+                "The photo's date could not be verified. Please choose the date yourself."
+            );
+            return;
+        }
+
+        // Use the camera's calendar date without a time-zone shift.
+        $("entry-date").value =
+            `${match[1]}-${match[2]}-${match[3]}`;
+
+        showStatus(
+            "Date filled from the first photo. You can change it before saving."
+        );
+    } catch (error) {
+        console.warn("Photo date could not be read:", error);
+
+        if (
+            request === photoDateRequest &&
+            editVersion === dateEditVersion &&
+            selectedPhotos[0] === file &&
+            !$("entry-date").value &&
+            !saving
+        ) {
+            showStatus(
+                "Couldn't read this photo's capture date. Please choose the date yourself."
+            );
+        }
+    }
+}
+
+/* Entry editor */
+
 function closeEditor() {
+    photoDateRequest += 1;
     editingEntry = null;
     selectedPhotos = [];
     clearPreviews();
@@ -106,6 +196,7 @@ function openEditor(entry = null) {
 
     closeEditor();
 
+    // Copy the photos so Cancel discards unsaved removals.
     editingEntry = entry
         ? { ...entry, photos: [...entry.photos] }
         : null;
@@ -115,7 +206,7 @@ function openEditor(entry = null) {
         : "What happened this time?";
 
     $("title").value = entry?.title || "";
-    $("entry-date").value = entry?.entry_date || localDate();
+    $("entry-date").value = entry?.entry_date || "";
     $("location").value = entry?.location || "";
     $("story").value = entry?.story || "";
 
@@ -130,6 +221,8 @@ function openEditor(entry = null) {
     $("title").focus();
 }
 
+/* Password panel */
+
 function closePasswordPanel() {
     $("password-form").reset();
     $("password-panel").hidden = true;
@@ -142,6 +235,8 @@ function openPasswordPanel() {
     $("password-panel").scrollIntoView({ behavior: "smooth" });
     $("new-password").focus();
 }
+
+/* Prevent conflicting changes during a save or deletion */
 
 function updateBusyControls() {
     const busy = saving || updatingPassword || deleting;
@@ -173,6 +268,8 @@ function updateBusyControls() {
         button.disabled = busy;
     });
 }
+
+/* Delete a post */
 
 async function deleteEntry(entry) {
     if (!canWrite || saving || updatingPassword || deleting) return;
@@ -208,7 +305,6 @@ async function deleteEntry(entry) {
             closeEditor();
         }
 
-        // Remove it locally even if the subsequent refresh fails.
         entries = entries.filter((item) => item.id !== entry.id);
         renderEntries();
 
@@ -227,6 +323,8 @@ async function deleteEntry(entry) {
         updateBusyControls();
     }
 }
+
+/* Display posts */
 
 function renderEntries() {
     const container = $("entries");
@@ -325,6 +423,8 @@ function renderEntries() {
     });
 }
 
+/* Load posts from Supabase */
+
 async function loadEntries(reset = false) {
     $("more-button").disabled = true;
 
@@ -353,6 +453,8 @@ async function loadEntries(reset = false) {
         $("more-button").disabled = false;
     }
 }
+
+/* Check sign-in and editor permissions */
 
 async function updateAccount() {
     const { data, error } = await db.auth.getUser();
@@ -383,7 +485,7 @@ async function updateAccount() {
     renderEntries();
 }
 
-/* Sign-in and navigation */
+/* Navigation buttons */
 
 $("account-button").addEventListener("click", () => {
     $("login-panel").hidden = false;
@@ -405,17 +507,29 @@ $("close-password").addEventListener("click", () => {
 $("new-button").addEventListener("click", () => openEditor());
 
 $("cancel-button").addEventListener("click", () => {
-    if (!saving && !deleting) closeEditor();
+    if (!saving && !updatingPassword && !deleting) {
+        closeEditor();
+    }
 });
+
+/* Select photos and try to fill the date */
 
 $("photos").addEventListener("change", () => {
     if (saving || updatingPassword || deleting) return;
 
-    selectedPhotos.push(...$("photos").files);
+    const files = [...$("photos").files];
+
+    if (!files.length) return;
+
+    selectedPhotos.push(...files);
     $("photos").value = "";
 
     renderPhotoPreviews();
+
+    fillDateFromPhoto(selectedPhotos[0]);
 });
+
+/* Sign in */
 
 $("login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -450,6 +564,8 @@ $("login-form").addEventListener("submit", async (event) => {
     }
 });
 
+/* Sign out */
+
 $("signout-button").addEventListener("click", async () => {
     if (saving || updatingPassword || deleting) return;
 
@@ -466,7 +582,7 @@ $("signout-button").addEventListener("click", async () => {
     }
 });
 
-/* Set or change the signed-in user's password */
+/* Set or change password */
 
 $("password-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -514,7 +630,7 @@ $("password-form").addEventListener("submit", async (event) => {
 /* Load older entries */
 
 $("more-button").addEventListener("click", async () => {
-    if (saving || deleting) return;
+    if (saving || updatingPassword || deleting) return;
 
     try {
         await loadEntries();
@@ -523,7 +639,7 @@ $("more-button").addEventListener("click", async () => {
     }
 });
 
-/* Create and edit entries */
+/* Create or update a post */
 
 $("entry-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -567,7 +683,9 @@ $("entry-form").addEventListener("submit", async (event) => {
         }
 
         if (!entryDate) {
-            throw new Error("Please choose a date.");
+            throw new Error(
+                "Please choose a date or select a photo with a capture date."
+            );
         }
 
         const extensions = {
