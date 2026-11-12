@@ -8,8 +8,10 @@ let user = null;
 let canWrite = false;
 let editingEntry = null;
 let entries = [];
+let selectedPhotos = [];
 let previewUrls = [];
 let offset = 0;
+let saving = false;
 
 const pageSize = 10;
 
@@ -41,25 +43,70 @@ function clearPreviews() {
     $("photo-preview").replaceChildren();
 }
 
-function makePreview(src, alt) {
+function addPhotoPreview(src, alt, onRemove) {
+    const item = document.createElement("div");
+    item.className = "preview-item";
+
     const image = document.createElement("img");
     image.src = src;
     image.alt = alt;
-    $("photo-preview").append(image);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-photo";
+    remove.textContent = "Remove photo";
+    remove.disabled = saving;
+
+    remove.addEventListener("click", () => {
+        if (saving) return;
+        onRemove();
+        renderPhotoPreviews();
+    });
+
+    item.append(image, remove);
+    $("photo-preview").append(item);
+}
+
+function renderPhotoPreviews() {
+    clearPreviews();
+
+    (editingEntry?.photos || []).forEach((path, index) => {
+        addPhotoPreview(
+            photoUrl(path),
+            `Existing photo ${index + 1}`,
+            () => editingEntry.photos.splice(index, 1)
+        );
+    });
+
+    selectedPhotos.forEach((file, index) => {
+        const url = URL.createObjectURL(file);
+        previewUrls.push(url);
+
+        addPhotoPreview(
+            url,
+            file.name,
+            () => selectedPhotos.splice(index, 1)
+        );
+    });
 }
 
 function closeEditor() {
     editingEntry = null;
+    selectedPhotos = [];
     clearPreviews();
     $("entry-form").reset();
     $("editor-panel").hidden = true;
 }
 
 function openEditor(entry = null) {
-    if (!canWrite) return;
+    if (!canWrite || saving) return;
 
     closeEditor();
-    editingEntry = entry;
+
+    // Copy the photo list so Cancel discards unsaved removals.
+    editingEntry = entry
+        ? { ...entry, photos: [...entry.photos] }
+        : null;
 
     $("editor-heading").textContent = entry
         ? "Amend the official record."
@@ -74,9 +121,7 @@ function openEditor(entry = null) {
         ? "Save changes"
         : "Add to the record";
 
-    (entry?.photos || []).forEach((path, index) => {
-        makePreview(photoUrl(path), `Existing photo ${index + 1}`);
-    });
+    renderPhotoPreviews();
 
     $("editor-panel").hidden = false;
     $("editor-panel").scrollIntoView({ behavior: "smooth" });
@@ -128,6 +173,7 @@ function renderEntries() {
 
         if (canWrite) {
             const edit = document.createElement("button");
+            edit.type = "button";
             edit.className = "text-button";
             edit.textContent = "Amend the record";
             edit.addEventListener("click", () => openEditor(entry));
@@ -220,6 +266,25 @@ async function updateAccount() {
     renderEntries();
 }
 
+function setSaving(value) {
+    saving = value;
+
+    $("publish-button").disabled = value;
+    $("cancel-button").disabled = value;
+    $("new-button").disabled = value;
+    $("signout-button").disabled = value;
+
+    $("title").disabled = value;
+    $("entry-date").disabled = value;
+    $("location").disabled = value;
+    $("story").disabled = value;
+    $("photos").disabled = value;
+
+    document.querySelectorAll(".remove-photo").forEach((button) => {
+        button.disabled = value;
+    });
+}
+
 $("account-button").addEventListener("click", () => {
     $("login-panel").hidden = false;
     $("email").focus();
@@ -231,20 +296,19 @@ $("close-login").addEventListener("click", () => {
 
 $("new-button").addEventListener("click", () => openEditor());
 
-$("cancel-button").addEventListener("click", closeEditor);
+$("cancel-button").addEventListener("click", () => {
+    if (!saving) closeEditor();
+});
 
 $("photos").addEventListener("change", () => {
-    clearPreviews();
+    if (saving) return;
 
-    (editingEntry?.photos || []).forEach((path, index) => {
-        makePreview(photoUrl(path), `Existing photo ${index + 1}`);
-    });
+    selectedPhotos.push(...$("photos").files);
 
-    [...$("photos").files].forEach((file) => {
-        const url = URL.createObjectURL(file);
-        previewUrls.push(url);
-        makePreview(url, file.name);
-    });
+    // Reset the picker so the same file can be selected again.
+    $("photos").value = "";
+
+    renderPhotoPreviews();
 });
 
 $("login-form").addEventListener("submit", async (event) => {
@@ -281,15 +345,18 @@ $("login-form").addEventListener("submit", async (event) => {
 });
 
 $("signout-button").addEventListener("click", async () => {
-    const { error } = await db.auth.signOut();
+    if (saving) return;
 
-    if (error) {
+    try {
+        const { error } = await db.auth.signOut();
+
+        if (error) throw error;
+
+        await updateAccount();
+        showStatus("Clocked out. Stay out of trouble.");
+    } catch (error) {
         showStatus(error.message, true);
-        return;
     }
-
-    await updateAccount();
-    showStatus("Clocked out. Stay out of trouble.");
 });
 
 $("more-button").addEventListener("click", async () => {
@@ -303,18 +370,21 @@ $("more-button").addEventListener("click", async () => {
 $("entry-form").addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    if (!canWrite) return;
+    if (!canWrite || saving) return;
 
-    const button = $("publish-button");
-    const files = [...$("photos").files];
-    const existingPhotos = editingEntry?.photos || [];
+    const files = [...selectedPhotos];
+    const existingPhotos = [...(editingEntry?.photos || [])];
+    const editingId = editingEntry?.id;
     const uploaded = [];
-    const isEditing = Boolean(editingEntry);
+
+    const title = $("title").value.trim();
+    const story = $("story").value.trim();
+    const entryDate = $("entry-date").value;
+    const location = $("location").value.trim();
 
     let saved = false;
 
-    button.disabled = true;
-    $("cancel-button").disabled = true;
+    setSaving(true);
 
     try {
         if (files.length + existingPhotos.length > 12) {
@@ -322,7 +392,19 @@ $("entry-form").addEventListener("submit", async (event) => {
         }
 
         if (!files.length && !existingPhotos.length) {
-            throw new Error("We need evidence. Please choose at least one photo.");
+            throw new Error(
+                "We need evidence. Keep at least one photo or add a replacement."
+            );
+        }
+
+        if (!title || !story) {
+            throw new Error(
+                "Every incident needs a title and a version of events."
+            );
+        }
+
+        if (!entryDate) {
+            throw new Error("Please choose a date.");
         }
 
         const extensions = {
@@ -339,13 +421,6 @@ $("entry-form").addEventListener("submit", async (event) => {
             if (file.size > 10 * 1024 * 1024) {
                 throw new Error(`${file.name} is larger than 10 MB.`);
             }
-        }
-
-        const title = $("title").value.trim();
-        const story = $("story").value.trim();
-
-        if (!title || !story) {
-            throw new Error("Every incident needs a title and a version of events.");
         }
 
         for (let index = 0; index < files.length; index++) {
@@ -373,18 +448,18 @@ $("entry-form").addEventListener("submit", async (event) => {
         const entry = {
             title,
             story,
-            entry_date: $("entry-date").value,
-            location: $("location").value.trim(),
+            entry_date: entryDate,
+            location,
             photos: [...existingPhotos, ...uploaded]
         };
 
         let result;
 
-        if (editingEntry) {
+        if (editingId) {
             result = await db
                 .from("entries")
                 .update(entry)
-                .eq("id", editingEntry.id)
+                .eq("id", editingId)
                 .select()
                 .single();
         } else {
@@ -401,7 +476,7 @@ $("entry-form").addEventListener("submit", async (event) => {
         closeEditor();
 
         showStatus(
-            isEditing
+            editingId
                 ? "The official record has been amended."
                 : "Incident added to the record."
         );
@@ -425,24 +500,11 @@ $("entry-form").addEventListener("submit", async (event) => {
             true
         );
     } finally {
-        button.disabled = false;
-        $("cancel-button").disabled = false;
+        setSaving(false);
     }
 });
 
 async function start() {
-    if (
-        SUPABASE_URL.includes("PASTE_") ||
-        SUPABASE_KEY.includes("PASTE_")
-    ) {
-        showStatus(
-            "Add your Supabase URL and publishable key in blog.js to connect the journal."
-        );
-
-        renderEntries();
-        return;
-    }
-
     try {
         db = window.supabase.createClient(
             SUPABASE_URL,
